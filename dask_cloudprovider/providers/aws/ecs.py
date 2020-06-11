@@ -109,7 +109,8 @@ class Task:
         find_address_timeout,
         name=None,
         platform_version=None,
-        fargate_use_private_ip=False,
+        fargate_scheduler_use_private_ip=False,
+        fargate_worker_use_private_ip=False,
         **kwargs
     ):
         self.lock = asyncio.Lock()
@@ -135,7 +136,8 @@ class Task:
         self.tags = tags
         self._find_address_timeout = find_address_timeout
         self.platform_version = platform_version
-        self._fargate_use_private_ip = fargate_use_private_ip
+        self._fargate_scheduler_use_private_ip = fargate_scheduler_use_private_ip
+        self._fargate_worker_use_private_ip = fargate_worker_use_private_ip
         self.kwargs = kwargs
         self.status = "created"
 
@@ -151,7 +153,7 @@ class Task:
 
     @property
     def _use_public_ip(self):
-        return self.fargate and not self._fargate_use_private_ip
+        return self.fargate and (not self._fargate_scheduler_use_private_ip or not self._fargate_worker_use_private_ip)
 
     async def _is_long_arn_format_enabled(self):
         async with self._client("ecs") as ecs:
@@ -179,10 +181,11 @@ class Task:
         )
         while timeout.run():
             async for line in self.logs():
-                for query_string in ["worker at:", "Scheduler at:"]:
+                for query_string, fargate_use_private_ip in [("worker at:", self._fargate_worker_use_private_ip),
+                                                             ("Scheduler at:", self._fargate_scheduler_use_private_ip)]:
                     if query_string in line:
                         address = line.split(query_string)[1].strip()
-                        if self._use_public_ip:
+                        if self.fargate and not fargate_use_private_ip:
                             self.external_address = address.replace(
                                 self.private_ip, self.public_ip
                             )
@@ -604,7 +607,8 @@ class ECSCluster(SpecCluster):
         aws_secret_access_key=None,
         region_name=None,
         platform_version=None,
-        fargate_use_private_ip=False,
+        fargate_scheduler_use_private_ip=False,
+        fargate_worker_use_private_ip=False,
         **kwargs
     ):
         self._fargate_scheduler = fargate_scheduler
@@ -635,7 +639,8 @@ class ECSCluster(SpecCluster):
         self._tags = tags
         self._find_address_timeout = find_address_timeout
         self._skip_cleanup = skip_cleanup
-        self._fargate_use_private_ip = fargate_use_private_ip
+        self._fargate_scheduler_use_private_ip = fargate_scheduler_use_private_ip
+        self._fargate_worker_use_private_ip = fargate_worker_use_private_ip
         self._aws_access_key_id = aws_access_key_id
         self._aws_secret_access_key = aws_secret_access_key
         self._region_name = region_name
@@ -806,7 +811,8 @@ class ECSCluster(SpecCluster):
             "tags": self.tags,
             "find_address_timeout": self._find_address_timeout,
             "platform_version": self._platform_version,
-            "fargate_use_private_ip": self._fargate_use_private_ip,
+            "fargate_scheduler_use_private_ip": self._fargate_scheduler_use_private_ip,
+            "fargate_worker_use_private_ip": self._fargate_worker_use_private_ip,
         }
         scheduler_options = {
             "task_definition_arn": self.scheduler_task_definition_arn,
