@@ -192,6 +192,8 @@ class Task:
                         logger.debug("%s", line)
                         self.address = address
                         return
+                    else:
+                        pass
             else:
                 if not await self._task_is_running():
                     raise RuntimeError("%s exited unexpectedly!" % type(self).__name__)
