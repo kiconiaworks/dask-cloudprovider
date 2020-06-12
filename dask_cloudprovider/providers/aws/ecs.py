@@ -604,7 +604,8 @@ class ECSCluster(SpecCluster):
         aws_secret_access_key=None,
         region_name=None,
         platform_version=None,
-        fargate_use_private_ip=False,
+        fargate_scheduler_use_private_ip=False,
+        fargate_worker_use_private_ip=False,
         **kwargs
     ):
         self._fargate_scheduler = fargate_scheduler
@@ -635,7 +636,8 @@ class ECSCluster(SpecCluster):
         self._tags = tags
         self._find_address_timeout = find_address_timeout
         self._skip_cleanup = skip_cleanup
-        self._fargate_use_private_ip = fargate_use_private_ip
+        self._fargate_scheduler_use_private_ip = fargate_scheduler_use_private_ip
+        self._fargate_worker_use_private_ip = fargate_worker_use_private_ip
         self._aws_access_key_id = aws_access_key_id
         self._aws_secret_access_key = aws_secret_access_key
         self._region_name = region_name
@@ -806,11 +808,11 @@ class ECSCluster(SpecCluster):
             "tags": self.tags,
             "find_address_timeout": self._find_address_timeout,
             "platform_version": self._platform_version,
-            "fargate_use_private_ip": self._fargate_use_private_ip,
         }
         scheduler_options = {
             "task_definition_arn": self.scheduler_task_definition_arn,
             "fargate": self._fargate_scheduler,
+            "fargate_use_private_ip": self._fargate_scheduler_use_private_ip,
             **options,
         }
         worker_options = {
@@ -820,6 +822,7 @@ class ECSCluster(SpecCluster):
             "mem": self._worker_mem,
             "gpu": self._worker_gpu,
             "extra_args": self._worker_extra_args,
+            "fargate_use_private_ip": self._fargate_worker_use_private_ip,
             **options,
         }
 
