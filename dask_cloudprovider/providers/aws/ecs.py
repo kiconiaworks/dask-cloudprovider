@@ -46,7 +46,7 @@ class Task:
         The ARN of the task definition that this object should use to launch
         itself.
 
-    vpc_subnets: List[str]
+    vpc_subnets: Dict[str, List[str]]
         The VPC subnets to use for the ENI that will be created when launching
         this task.
 
@@ -229,7 +229,9 @@ class Task:
                         launchType="FARGATE" if self.fargate else "EC2",
                         networkConfiguration={
                             "awsvpcConfiguration": {
-                                "subnets": self._vpc_subnets,
+                                "subnets": self._vpc_subnets["public"]
+                                if self._use_public_ip
+                                else self._vpc_subnets["private"],
                                 "securityGroups": self._security_groups,
                                 "assignPublicIp": "ENABLED"
                                 if self._use_public_ip
@@ -524,7 +526,7 @@ class ECSCluster(SpecCluster):
         The ID of the VPC you wish to launch your cluster in.
 
         Defaults to ``None`` (your default VPC will be used).
-    subnets: List[str] (optional)
+    subnets: Dict[str, List[str]] (optional)
         A list of subnets to use when running your task.
 
         Defaults to ``None``. (all subnets available in your VPC will be used)
@@ -783,6 +785,11 @@ class ECSCluster(SpecCluster):
             self._vpc_subnets = (
                 self.config.get("subnets") or await self._get_vpc_subnets()
             )
+            subnets = {
+                "private": self._vpc_subnets,
+                "public": self._vpc_subnets
+            }
+            self._vpc_subnets = subnets
 
         if self._security_groups is None:
             self._security_groups = (
