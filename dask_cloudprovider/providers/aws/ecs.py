@@ -46,8 +46,12 @@ class Task:
         The ARN of the task definition that this object should use to launch
         itself.
 
-    vpc_subnets: Dict[str, List[str]]
-        The VPC subnets to use for the ENI that will be created when launching
+    vpc_public_subnets: List[str]
+        The VPC public subnets to use for the ENI that will be created when launching
+        this task.
+
+    vpc_private_subnets: List[str]
+        The VPC private subnets to use for the ENI that will be created when launching
         this task.
 
     security_groups: List[str]
@@ -99,7 +103,8 @@ class Task:
         client,
         cluster_arn,
         task_definition_arn,
-        vpc_subnets,
+        vpc_public_subnets,
+        vpc_private_subnets,
         security_groups,
         log_group,
         log_stream_prefix,
@@ -128,7 +133,8 @@ class Task:
         self.log_stream_prefix = log_stream_prefix
         self.connection = None
         self._overrides = {}
-        self._vpc_subnets = vpc_subnets
+        self._vpc_public_subnets = vpc_public_subnets
+        self._vpc_private_subnets = vpc_private_subnets
         self._security_groups = security_groups
         self.fargate = fargate
         self.environment = environment or {}
@@ -229,9 +235,9 @@ class Task:
                         launchType="FARGATE" if self.fargate else "EC2",
                         networkConfiguration={
                             "awsvpcConfiguration": {
-                                "subnets": self._vpc_subnets["public"]
+                                "subnets": self._vpc_public_subnets
                                 if self._use_public_ip
-                                else self._vpc_subnets["private"],
+                                else self._vpc_private_subnets,
                                 "securityGroups": self._security_groups,
                                 "assignPublicIp": "ENABLED"
                                 if self._use_public_ip
@@ -526,10 +532,14 @@ class ECSCluster(SpecCluster):
         The ID of the VPC you wish to launch your cluster in.
 
         Defaults to ``None`` (your default VPC will be used).
-    subnets: Dict[str, List[str]] (optional)
-        A list of subnets to use when running your task.
+    public_subnets: List[str] (optional)
+        A list of public subnets to use when running your task.
 
-        Defaults to ``None``. (all subnets available in your VPC will be used)
+        Defaults to ``None``. (all public subnets available in your VPC will be used)
+    private_subnets: List[str] (optional)
+        A list of private subnets to use when running your task.
+
+        Defaults to ``None``. (all private subnets available in your VPC will be used)
     security_groups: List[str] (optional)
         A list of security group IDs to use when launching tasks.
 
@@ -596,7 +606,8 @@ class ECSCluster(SpecCluster):
         cloudwatch_logs_stream_prefix=None,
         cloudwatch_logs_default_retention=None,
         vpc=None,
-        subnets=None,
+        public_subnets=None,
+        private_subnets=None,
         security_groups=None,
         environment=None,
         tags=None,
@@ -632,7 +643,8 @@ class ECSCluster(SpecCluster):
         self._cloudwatch_logs_stream_prefix = cloudwatch_logs_stream_prefix
         self._cloudwatch_logs_default_retention = cloudwatch_logs_default_retention
         self._vpc = vpc
-        self._vpc_subnets = subnets
+        self._vpc_public_subnets = public_subnets
+        self._vpc_private_subnets = private_subnets
         self._security_groups = security_groups
         self._environment = environment
         self._tags = tags
@@ -781,15 +793,15 @@ class ECSCluster(SpecCluster):
         if self._vpc == "default":
             self._vpc = await self._get_default_vpc()
 
-        if self._vpc_subnets is None:
-            self._vpc_subnets = (
+        if self._vpc_public_subnets is None:
+            self._vpc_public_subnets = (
                 self.config.get("subnets") or await self._get_vpc_subnets()
             )
-            subnets = {
-                "private": self._vpc_subnets,
-                "public": self._vpc_subnets
-            }
-            self._vpc_subnets = subnets
+
+        if self._vpc_private_subnets is None:
+            self._vpc_private_subnets = (
+                    self.config.get("subnets") or await self._get_vpc_subnets()
+            )
 
         if self._security_groups is None:
             self._security_groups = (
@@ -807,7 +819,8 @@ class ECSCluster(SpecCluster):
         options = {
             "client": self._client,
             "cluster_arn": self.cluster_arn,
-            "vpc_subnets": self._vpc_subnets,
+            "vpc_public_subnets": self._vpc_public_subnets,
+            "vpc_private_subnets": self._vpc_private_subnets,
             "security_groups": self._security_groups,
             "log_group": self.cloudwatch_logs_group,
             "log_stream_prefix": self._cloudwatch_logs_stream_prefix,
